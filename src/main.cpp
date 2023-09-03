@@ -1,0 +1,143 @@
+#include <Arduino.h>
+#include <WifiConfig.hpp>
+#include <Wire.h>
+#include <SHT2x.h>
+#include <Adafruit_SH110X.h>
+#include <arduino-timer.h>
+#include <OneButton.h>
+#include <time.h>
+#include <SerialHandler.hpp>
+#include "defines.hpp"
+#include "secrets.h"
+
+bool debug = true;
+WifiConfig wifiConfig(WIFI_SSID, WIFI_PASSWORD, "ESP32 Thermo-Clock Hub", "thermo-clock", AUTH_USER, AUTH_PASS, true, true, debug);
+SHT2x sensor;
+Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Configuration displayTest("/display", debug);
+Timer<3> timer;
+bool hasSensor = false;
+int pirState = 1;
+float temp = 0.0;
+float humi = 0.0;
+DisplayOffsets d_offsets;
+
+void updateDisplay();
+void setupPeripherals();
+void readSensor();
+void serialCb(const String&);
+
+void setup() {
+  if (debug) {
+    Serial.begin(115200);
+    delay(10);
+  }
+
+  setupPeripherals();
+  randomSeed(analogRead(RANDOM_SEED_PIN));
+  configTzTime(CLOCK_TIMEZONE, NTP_SERVER);
+
+  displayTest
+    .add("line_1_x", 0, [](int value) {
+      d_offsets.line_1_x = value;
+    })
+    .add("clock_x", 0, [](int value) {
+      d_offsets.clock_x = value;
+    })
+    .add("clock_y", 0, [](int value) {
+      d_offsets.clock_y = value;
+    })
+    .add("contrast", 127, [](int value) {
+      if (value < 0) value = 0;
+      if (value > 127) value = 127;
+      display.setContrast(value);
+    })
+  ;
+  wifiConfig.registerConfigApi(displayTest);
+
+  wifiConfig.beginMQTT(
+    MQTT_SERVER,
+    1883,
+    MQTT_USER,
+    MQTT_PASS,
+    "homeassistant/",
+    MQTTConnectProps([]() {
+      if (hasSensor) {
+        wifiConfig.publish("sensor/{sensorId}_temperature/config", wifiConfig.sensorConfigPayload("temperature", "temperature", "°C"), true);
+        wifiConfig.publish("sensor/{sensorId}_humidity/config", wifiConfig.sensorConfigPayload("humidity", "humidity", "%"), true);
+        readSensor();
+      }
+    }, [](String topic, String data) {
+    })
+  );
+
+  timer.every(1000, [](void*) -> bool { updateDisplay(); return true; });
+  timer.every(10000, [](void*) -> bool { d_offsets.randomize(); return true; });
+  if (hasSensor) {
+    timer.every(60000, [](void*) -> bool { readSensor(); return true; });
+  }
+}
+
+void loop() {
+  pirState = digitalRead(PIR_PIN);
+  wifiConfig.loop();
+  timer.tick();
+  handleSerial(debug, serialCb);
+}
+
+void updateDisplay() {
+  struct tm timeinfo;
+  display.clearDisplay();
+  if (pirState == 0) {
+    display.display();
+    return;
+  }
+
+  if (wifiConfig.isWifiConnected()) getLocalTime(&timeinfo);
+
+  // display temperature and humidity on top line
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0 + d_offsets.line_1_x, 0);
+  display.print(temp, 1);
+  display.print("C ");
+  display.print(humi, 1);
+  display.println("%");
+
+  display.setCursor(0 + d_offsets.clock_x, 12 + d_offsets.clock_y);
+  display.setTextSize(2);
+  display.println(&timeinfo, "%H:%M:%S");
+
+  display.display();
+}
+
+void setupPeripherals() {
+  pinMode(RANDOM_SEED_PIN, INPUT);
+  pinMode(PIR_PIN, INPUT);
+  Wire.begin();
+  hasSensor = sensor.begin(&Wire);
+  if (debug) {
+    uint8_t stat = sensor.getStatus();
+    Serial.print("Sensor status: ");
+    Serial.print(stat, HEX);
+    Serial.println();
+  }
+  if (display.begin(SCREEN_ADDRESS, true)) {
+    if (debug) Serial.println(F("SH110X started"));
+    display.setContrast(127);
+  }
+}
+
+void readSensor() {
+  if (debug) Serial.println("Reading sensor");
+
+  sensor.read();
+  temp = sensor.getTemperature();
+  humi = sensor.getHumidity();
+  wifiConfig.publish("sensor/{sensorId}_temperature/state", String(temp), true);
+  wifiConfig.publish("sensor/{sensorId}_humidity/state", String(humi), true);
+}
+
+void serialCb(const String& data) {
+  // do nothing atm
+}
