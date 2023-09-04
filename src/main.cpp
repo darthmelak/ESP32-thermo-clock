@@ -14,12 +14,14 @@ bool debug = true;
 WifiConfig wifiConfig(WIFI_SSID, WIFI_PASSWORD, "ESP32 Thermo-Clock Hub", "thermo-clock", AUTH_USER, AUTH_PASS, true, true, debug);
 SHT2x sensor;
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
-Configuration displayTest("/display", debug);
-Timer<3> timer;
+Timer<4> timer;
+
 bool hasSensor = false;
-int pirState = 1;
 float temp = 0.0;
 float humi = 0.0;
+IntConfig PIR("PIR", 0);
+IntConfig rawPIR("rawPIR", 0);
+void *pirDelay = nullptr;
 DisplayOffsets d_offsets;
 
 void updateDisplay();
@@ -37,23 +39,21 @@ void setup() {
   randomSeed(analogRead(RANDOM_SEED_PIN));
   configTzTime(CLOCK_TIMEZONE, NTP_SERVER);
 
-  displayTest
-    .add("line_1_x", 0, [](int value) {
-      d_offsets.line_1_x = value;
-    })
-    .add("clock_x", 0, [](int value) {
-      d_offsets.clock_x = value;
-    })
-    .add("clock_y", 0, [](int value) {
-      d_offsets.clock_y = value;
-    })
-    .add("contrast", 127, [](int value) {
-      if (value < 0) value = 0;
-      if (value > 127) value = 127;
-      display.setContrast(value);
-    })
-  ;
-  wifiConfig.registerConfigApi(displayTest);
+  rawPIR.setCb([](int value) {
+    if (value == HIGH) {
+      if (pirDelay) timer.cancel(pirDelay);
+      PIR.setValue(HIGH);
+    } else {
+      pirDelay = timer.in(30000, [](void*) -> bool {
+        PIR.setValue(LOW);
+        pirDelay = nullptr;
+        return true;
+      });
+    }
+  });
+  PIR.setCb([](int value) {
+    wifiConfig.publish("binary_sensor/{sensorId}_PIR/state", value ? "ON" : "OFF", true);
+  });
 
   wifiConfig.beginMQTT(
     MQTT_SERVER,
@@ -62,6 +62,7 @@ void setup() {
     MQTT_PASS,
     "homeassistant/",
     MQTTConnectProps([]() {
+      wifiConfig.publish("binary_sensor/{sensorId}_PIR/config", wifiConfig.binarySensorConfigPayload("PIR", "motion"), true);
       if (hasSensor) {
         wifiConfig.publish("sensor/{sensorId}_temperature/config", wifiConfig.sensorConfigPayload("temperature", "temperature", "°C"), true);
         wifiConfig.publish("sensor/{sensorId}_humidity/config", wifiConfig.sensorConfigPayload("humidity", "humidity", "%"), true);
@@ -79,7 +80,7 @@ void setup() {
 }
 
 void loop() {
-  pirState = digitalRead(PIR_PIN);
+  rawPIR.setValue(digitalRead(PIR_PIN));
   wifiConfig.loop();
   timer.tick();
   handleSerial(debug, serialCb);
@@ -88,7 +89,7 @@ void loop() {
 void updateDisplay() {
   struct tm timeinfo;
   display.clearDisplay();
-  if (pirState == 0) {
+  if (PIR.getIntVal() == 0) {
     display.display();
     return;
   }
@@ -124,7 +125,6 @@ void setupPeripherals() {
   }
   if (display.begin(SCREEN_ADDRESS, true)) {
     if (debug) Serial.println(F("SH110X started"));
-    display.setContrast(127);
   }
 }
 
