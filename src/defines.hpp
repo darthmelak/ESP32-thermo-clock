@@ -11,6 +11,8 @@
 
 #define RANDOM_SEED_PIN 36
 #define PIR_PIN 34
+#define SERVO_PIN 25
+#define SERVO_SW_PIN 26
 
 struct DisplayOffsets {
     int line_1_x = 0;

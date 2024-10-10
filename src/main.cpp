@@ -6,9 +6,18 @@
 #include <arduino-timer.h>
 #include <OneButton.h>
 #include <time.h>
+#include <ESP32Servo.h>
+#include <HAswitchHelper.hpp>
+#include <HAnumberHelper.hpp>
 #include <SerialHandler.hpp>
 #include "defines.hpp"
 #include "secrets.h"
+
+void updateDisplay();
+void setupPeripherals();
+void readSensor();
+void serialCb(const String&);
+void servoPosCb(int);
 
 bool debug = true;
 WifiConfig wifiConfig(WIFI_SSID, WIFI_PASSWORD, "ESP32 Thermo-Clock Hub", "thermo-clock", AUTH_USER, AUTH_PASS, true, true, debug);
@@ -23,11 +32,9 @@ IntConfig PIR("PIR", 0);
 IntConfig rawPIR("rawPIR", 0);
 void *pirDelay = nullptr;
 DisplayOffsets d_offsets;
-
-void updateDisplay();
-void setupPeripherals();
-void readSensor();
-void serialCb(const String&);
+HAswitchHelper servo_sw(wifiConfig, "servo_sw", SERVO_SW_PIN, false, debug);
+HAnumberHelper servo_pos(wifiConfig, "nr", servoPosCb, 90, 0, 180, 1, debug);
+Servo servo;
 
 void setup() {
   if (debug) {
@@ -54,6 +61,7 @@ void setup() {
   PIR.setCb([](int value) {
     wifiConfig.publish("binary_sensor/{sensorId}_PIR/state", value ? "ON" : "OFF", true);
   });
+  servo.attach(SERVO_PIN);
 
   wifiConfig.beginMQTT(
     MQTT_SERVER,
@@ -68,9 +76,16 @@ void setup() {
         wifiConfig.publish("sensor/{sensorId}_humidity/config", wifiConfig.sensorConfigPayload("humidity", "humidity", "%"), true);
         readSensor();
       }
+      servo_sw.onMqttConnect();
+      servo_pos.onMqttConnect();
     }, [](String topic, String data) {
+      servo_sw.onMqttMessage(topic, data);
+      servo_pos.onMqttMessage(topic, data);
     })
   );
+
+  servo_sw.begin();
+  servo_pos.begin();
 
   timer.every(1000, [](void*) -> bool { updateDisplay(); return true; });
   timer.every(10000, [](void*) -> bool { d_offsets.randomize(); return true; });
@@ -140,4 +155,8 @@ void readSensor() {
 
 void serialCb(const String& data) {
   // do nothing atm
+}
+
+void servoPosCb(int value) {
+  servo.write(value);
 }
