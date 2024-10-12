@@ -9,6 +9,7 @@
 #include <ESP32Servo.h>
 #include <HAswitchHelper.hpp>
 #include <HAnumberHelper.hpp>
+#include <HAfanHelper.hpp>
 #include <SerialHandler.hpp>
 #include "defines.hpp"
 #include "secrets.h"
@@ -33,7 +34,9 @@ IntConfig rawPIR("rawPIR", 0);
 void *pirDelay = nullptr;
 DisplayOffsets d_offsets;
 HAswitchHelper servo_sw(wifiConfig, "servo_sw", SERVO_SW_PIN, false, debug);
-HAnumberHelper servo_pos(wifiConfig, "nr", servoPosCb, 90, 0, 180, 1, debug);
+HAnumberHelper servo_pos(wifiConfig, "servo_pos", servoPosCb, 90, 0, 180, 1, debug);
+HAfanHelper fan_1(wifiConfig, "fan_1", FAN_PIN, 8, 0, 0, false, debug);
+
 Servo servo;
 
 void setup() {
@@ -78,14 +81,17 @@ void setup() {
       }
       servo_sw.onMqttConnect();
       servo_pos.onMqttConnect();
+      fan_1.onMqttConnect();
     }, [](String topic, String data) {
       servo_sw.onMqttMessage(topic, data);
       servo_pos.onMqttMessage(topic, data);
+      fan_1.onMqttMessage(topic, data);
     })
   );
 
   servo_sw.begin();
   servo_pos.begin();
+  fan_1.begin();
 
   timer.every(1000, [](void*) -> bool { updateDisplay(); return true; });
   timer.every(10000, [](void*) -> bool { d_offsets.randomize(); return true; });
@@ -98,6 +104,7 @@ void loop() {
   rawPIR.setValue(digitalRead(PIR_PIN));
   wifiConfig.loop();
   timer.tick();
+  fan_1.tick();
   handleSerial(debug, serialCb);
 }
 
