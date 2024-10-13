@@ -24,6 +24,7 @@ bool debug = true;
 WifiConfig wifiConfig(WIFI_SSID, WIFI_PASSWORD, "ESP32 Thermo-Clock Hub", "thermo-clock", AUTH_USER, AUTH_PASS, true, true, debug);
 SHT2x sensor;
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Servo servo;
 Timer<4> timer;
 
 bool hasSensor = false;
@@ -36,8 +37,6 @@ DisplayOffsets d_offsets;
 HAswitchHelper servo_sw(wifiConfig, "servo_sw", SERVO_SW_PIN, false, debug);
 HAnumberHelper servo_pos(wifiConfig, "servo_pos", servoPosCb, 90, 0, 180, 1, debug);
 HAfanHelper fan_1(wifiConfig, "fan_1", FAN_PIN, 8, 0, 0, false, debug);
-
-Servo servo;
 
 void setup() {
   if (debug) {
@@ -64,7 +63,6 @@ void setup() {
   PIR.setCb([](int value) {
     wifiConfig.publish("binary_sensor/{sensorId}_PIR/state", value ? "ON" : "OFF", true);
   });
-  servo.attach(SERVO_PIN);
 
   wifiConfig.beginMQTT(
     MQTT_SERVER,
@@ -92,6 +90,7 @@ void setup() {
   servo_sw.begin();
   servo_pos.begin();
   fan_1.begin();
+  servo.attach(SERVO_PIN);
 
   timer.every(1000, [](void*) -> bool { updateDisplay(); return true; });
   timer.every(10000, [](void*) -> bool { d_offsets.randomize(); return true; });
