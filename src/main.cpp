@@ -37,6 +37,7 @@ DisplayOffsets d_offsets;
 HAswitchHelper servo_sw(wifiConfig, "servo_sw", SERVO_SW_PIN, false, debug);
 HAnumberHelper servo_pos(wifiConfig, "servo_pos", servoPosCb, 90, 0, 180, 1, debug);
 HAfanHelper fan_1(wifiConfig, "fan_1", FAN_PIN, 8, 0, 0, false, debug);
+HAfanHelper fan_2(wifiConfig, "fan_2", FAN2_PIN, 8, 0, 0, false, debug);
 
 void setup() {
   if (debug) {
@@ -80,16 +81,19 @@ void setup() {
       servo_sw.onMqttConnect();
       servo_pos.onMqttConnect();
       fan_1.onMqttConnect();
+      fan_2.onMqttConnect();
     }, [](String topic, String data) {
       servo_sw.onMqttMessage(topic, data);
       servo_pos.onMqttMessage(topic, data);
       fan_1.onMqttMessage(topic, data);
+      fan_2.onMqttMessage(topic, data);
     })
   );
 
   servo_sw.begin();
   servo_pos.begin();
   fan_1.begin();
+  fan_2.begin();
   servo.attach(SERVO_PIN);
 
   display.setRotation(2);
@@ -107,6 +111,7 @@ void loop() {
   wifiConfig.loop();
   timer.tick();
   fan_1.tick();
+  fan_2.tick();
   handleSerial(debug, serialCb);
 }
 
