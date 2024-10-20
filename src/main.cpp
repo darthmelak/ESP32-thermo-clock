@@ -92,6 +92,9 @@ void setup() {
   fan_1.begin();
   servo.attach(SERVO_PIN);
 
+  display.setRotation(2);
+  display.display();
+
   timer.every(1000, [](void*) -> bool { updateDisplay(); return true; });
   timer.every(10000, [](void*) -> bool { d_offsets.randomize(); return true; });
   if (hasSensor) {
