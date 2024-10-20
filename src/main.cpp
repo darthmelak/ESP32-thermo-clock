@@ -9,6 +9,7 @@
 #include <ESP32Servo.h>
 #include <HAswitchHelper.hpp>
 #include <HAnumberHelper.hpp>
+#include <HAlightHelper.hpp>
 #include <HAfanHelper.hpp>
 #include <SerialHandler.hpp>
 #include "defines.hpp"
@@ -38,6 +39,7 @@ HAswitchHelper servo_sw(wifiConfig, "servo_sw", SERVO_SW_PIN, false, debug);
 HAnumberHelper servo_pos(wifiConfig, "servo_pos", servoPosCb, 90, 0, 180, 1, debug);
 HAfanHelper fan_1(wifiConfig, "fan_1", FAN_PIN, 8, 0, 0, false, debug);
 HAfanHelper fan_2(wifiConfig, "fan_2", FAN2_PIN, 8, 0, 0, false, debug);
+HAlightHelper light(wifiConfig, "light", LIGHT_PIN, 255, 0, 0, true, debug);
 
 void setup() {
   if (debug) {
@@ -82,11 +84,13 @@ void setup() {
       servo_pos.onMqttConnect();
       fan_1.onMqttConnect();
       fan_2.onMqttConnect();
+      light.onMqttConnect();
     }, [](String topic, String data) {
       servo_sw.onMqttMessage(topic, data);
       servo_pos.onMqttMessage(topic, data);
       fan_1.onMqttMessage(topic, data);
       fan_2.onMqttMessage(topic, data);
+      light.onMqttMessage(topic, data);
     })
   );
 
@@ -94,6 +98,7 @@ void setup() {
   servo_pos.begin();
   fan_1.begin();
   fan_2.begin();
+  light.begin();
   servo.attach(SERVO_PIN);
 
   display.setRotation(2);

@@ -15,6 +15,7 @@
 #define SERVO_SW_PIN 26
 #define FAN_PIN 17
 #define FAN2_PIN 16
+#define LIGHT_PIN 27
 
 struct DisplayOffsets {
     int line_1_x = 0;
