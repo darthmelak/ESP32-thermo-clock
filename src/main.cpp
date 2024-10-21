@@ -39,7 +39,7 @@ HAswitchHelper servo_sw(wifiConfig, "servo_sw", SERVO_SW_PIN, false, debug);
 HAnumberHelper servo_pos(wifiConfig, "servo_pos", servoPosCb, 90, 0, 180, 1, debug);
 HAfanHelper fan_1(wifiConfig, "fan_1", FAN_PIN, 8, 0, 0, false, debug);
 HAfanHelper fan_2(wifiConfig, "fan_2", FAN2_PIN, 8, 0, 0, false, debug);
-HAlightHelper light(wifiConfig, "light", LIGHT_PIN, 255, 0, 0, true, debug);
+HAlightHelper light(wifiConfig, "light", LIGHT_PIN, 10, 0, 0, true, debug);
 
 void setup() {
   if (debug) {
